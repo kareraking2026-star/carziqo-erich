@@ -56,6 +56,14 @@ export async function fetchDrivingRoute(from: LatLng, to: LatLng, signal: AbortS
   return buildRoute(coords.map(([lng, lat]) => [lat, lng]));
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function rentalProgress(createdAt: string, rentalPeriod: number, now: Date = new Date()) {
+  const elapsed = Math.floor((now.getTime() - new Date(createdAt).getTime()) / DAY_MS);
+  const elapsedDays = Math.min(Math.max(elapsed, 0), rentalPeriod);
+  return { elapsedDays, daysRemaining: rentalPeriod - elapsedDays };
+}
+
 export function positionOnRoute(route: CarRoute, distance: number): { position: LatLng; heading: number } {
   const d = Math.min(Math.max(distance, 0), route.total);
   let i = 1;
