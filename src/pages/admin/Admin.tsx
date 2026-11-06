@@ -8,9 +8,10 @@ import AdminLogin from '@/pages/admin/AdminLogin';
 import AdminRequests from '@/pages/admin/AdminRequests';
 import AdminMembers from '@/pages/admin/AdminMembers';
 import AdminCars from '@/pages/admin/AdminCars';
+import AdminPaymentQr from '@/pages/admin/AdminPaymentQr';
 import AdminAccount from '@/pages/admin/AdminAccount';
 
-type Tab = 'recharges' | 'withdrawals' | 'members' | 'cars' | 'account';
+type Tab = 'recharges' | 'withdrawals' | 'members' | 'cars' | 'payments' | 'account';
 type Gate = 'checking' | 'signed_out' | 'admin';
 
 const tabs: { key: Tab; label: string }[] = [
@@ -18,6 +19,7 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'withdrawals', label: 'Withdrawals' },
   { key: 'members', label: 'Members' },
   { key: 'cars', label: 'Cars' },
+  { key: 'payments', label: 'Payments' },
   { key: 'account', label: 'Account' },
 ];
 
@@ -81,6 +83,7 @@ export default function Admin() {
         {tab === 'withdrawals' && <AdminRequests kind="withdrawals" />}
         {tab === 'members' && <AdminMembers />}
         {tab === 'cars' && <AdminCars />}
+        {tab === 'payments' && <AdminPaymentQr />}
         {tab === 'account' && <AdminAccount onSignOut={handleSignOut} />}
       </div>
     </AppLayout>

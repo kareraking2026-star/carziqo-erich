@@ -35,7 +35,7 @@ function escapeHtml(value: string): string {
 }
 
 function carSvg(color: string): string {
-  return `<svg viewBox="0 0 60 110" width="26" height="48" xmlns="http://www.w3.org/2000/svg">
+  return `<svg viewBox="0 0 60 110" width="16" height="30" xmlns="http://www.w3.org/2000/svg">
     <rect x="0" y="22" width="6" height="12" rx="2" fill="#1e293b"/>
     <rect x="54" y="22" width="6" height="12" rx="2" fill="#1e293b"/>
     <rect x="0" y="74" width="6" height="12" rx="2" fill="#1e293b"/>
@@ -53,11 +53,11 @@ function carSvg(color: string): string {
 
 export function createCarIcon(visual: CarVisual, status: CarStatus): L.DivIcon {
   const html = `<div style="position:relative;width:0;height:0">
-    <div class="fleet-car-body" style="position:absolute;left:-13px;top:-24px;width:26px;height:48px;transform-origin:50% 50%;filter:drop-shadow(0 3px 4px rgba(15,23,42,0.35))">${carSvg(visual.color)}</div>
-    <div style="position:absolute;left:0;top:30px;transform:translateX(-50%);white-space:nowrap;background:#ffffff;border:1px solid #dfe5f0;border-radius:10px;padding:4px 8px;box-shadow:0 2px 8px rgba(15,23,42,0.15);text-align:center;font-family:inherit">
-      <div style="font-size:11px;font-weight:600;color:#323643;max-width:150px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(visual.name)}</div>
-      <div style="font-size:10px;font-weight:600;color:#16a35a">₱${formatCurrency(visual.dailyIncome)}/day</div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:9px;color:#64748b">
+    <div class="fleet-car-body" style="position:absolute;left:-8px;top:-15px;width:16px;height:30px;transform-origin:50% 50%;filter:drop-shadow(0 2px 3px rgba(15,23,42,0.35))">${carSvg(visual.color)}</div>
+    <div style="position:absolute;left:0;top:18px;transform:translateX(-50%);white-space:nowrap;background:#ffffff;border:1px solid #dfe5f0;border-radius:8px;padding:2px 6px;box-shadow:0 1px 4px rgba(15,23,42,0.15);text-align:center;font-family:inherit">
+      <div style="font-size:9px;font-weight:600;color:#323643;max-width:110px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(visual.name)}</div>
+      <div style="font-size:9px;font-weight:600;color:#16a35a">₱${formatCurrency(visual.dailyIncome)}/day</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:8px;color:#64748b">
         <span style="width:6px;height:6px;border-radius:9999px;background:${STATUS_DOT[status]}"></span>${STATUS_LABELS[status]}
       </div>
     </div>

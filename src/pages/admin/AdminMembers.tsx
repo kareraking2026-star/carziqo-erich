@@ -1,38 +1,35 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { EmptyState } from '@/components/UI';
-import { Search, Users } from 'lucide-react';
+import AdminMemberForm, { type AdminMember } from '@/pages/admin/AdminMemberForm';
+import AdminWalletForm from '@/pages/admin/AdminWalletForm';
+import { Search, Users, Pencil, Wallet } from 'lucide-react';
 
-interface MemberRow {
-  id: string;
-  nickname: string;
-  phone: string;
-  wallet_balance: number;
-  carbon_points: number;
-  vip_level: number;
-  referral_code: string;
-  created_at: string;
-}
+type Mode = 'edit' | 'wallet';
 
 export default function AdminMembers() {
-  const [members, setMembers] = useState<MemberRow[]>([]);
+  const [members, setMembers] = useState<AdminMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [query, setQuery] = useState('');
+  const [active, setActive] = useState<{ member: AdminMember; mode: Mode } | null>(null);
+
+  const load = useCallback(async () => {
+    const { data, error: rpcError } = await supabase.rpc('admin_get_profiles');
+    if (rpcError || !Array.isArray(data)) {
+      setError(true);
+    } else {
+      setError(false);
+      setMembers(data as AdminMember[]);
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    (async () => {
-      const { data, error: rpcError } = await supabase.rpc('admin_get_profiles');
-      if (rpcError || !Array.isArray(data)) {
-        setError(true);
-      } else {
-        setMembers(data as MemberRow[]);
-      }
-      setLoading(false);
-    })();
-  }, []);
+    load();
+  }, [load]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -43,6 +40,11 @@ export default function AdminMembers() {
       (m.referral_code || '').toLowerCase().includes(q),
     );
   }, [members, query]);
+
+  function handleSaved() {
+    setActive(null);
+    load();
+  }
 
   if (loading) return <LoadingSpinner label="Loading members..." />;
   if (error) return <EmptyState icon={Users} title="Could not load members" subtitle="Check your admin session and try again." />;
@@ -72,17 +74,38 @@ export default function AdminMembers() {
                 {m.nickname?.charAt(0).toUpperCase() || '?'}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[#323643] truncate">{m.nickname || 'Unknown'}</p>
+                <p className="text-sm font-medium text-[#323643] truncate">
+                  {m.nickname || 'Unknown'}
+                  {m.is_blocked && <span className="ml-2 text-[10px] text-[#dc2626]">Blocked</span>}
+                </p>
                 <p className="text-[10px] text-[#9babc6] truncate">{m.phone || 'No phone'} • Code {m.referral_code || '-'}</p>
                 <p className="text-[10px] text-[#9babc6]">Joined {formatDate(m.created_at)}</p>
+                <p className="text-[10px] text-[#9babc6]">VIP {m.vip_level} • ₱{formatCurrency(m.wallet_balance)}</p>
               </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-sm font-semibold text-[#16a35a]">₱{formatCurrency(m.wallet_balance)}</p>
-                <p className="text-[10px] text-[#9babc6]">VIP {m.vip_level}</p>
+              <div className="flex flex-col gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => setActive({ member: m, mode: 'edit' })}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#dfe5f0] text-[11px] text-[#323643] hover:border-[#16a35a] transition-colors"
+                >
+                  <Pencil size={12} /> Edit
+                </button>
+                <button
+                  onClick={() => setActive({ member: m, mode: 'wallet' })}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#dfe5f0] text-[11px] text-[#323643] hover:border-[#16a35a] transition-colors"
+                >
+                  <Wallet size={12} /> Wallet
+                </button>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {active?.mode === 'edit' && (
+        <AdminMemberForm member={active.member} onClose={() => setActive(null)} onSaved={handleSaved} />
+      )}
+      {active?.mode === 'wallet' && (
+        <AdminWalletForm member={active.member} onClose={() => setActive(null)} onSaved={handleSaved} />
       )}
     </div>
   );

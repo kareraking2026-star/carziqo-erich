@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/context/ToastContext';
 import { formatCurrency } from '@/lib/utils';
 import { paymentMethods } from '@/lib/paymentMethods';
+import { fetchPaymentQrOverrides, type PaymentQrOverrides } from '@/lib/paymentQr';
 import AppLayout from '@/components/AppLayout';
 import PageHeader from '@/components/PageHeader';
 import { Loader as Loader2, Copy, Check, Upload, QrCode, CircleAlert as AlertCircle, Wallet, Link2, FileText, ImagePlus, X } from 'lucide-react';
@@ -30,10 +31,16 @@ export default function Recharge() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [qrOverrides, setQrOverrides] = useState<PaymentQrOverrides>({});
 
   const selectedMethod = paymentMethods.find((m) => m.id === method)!;
   const SelectedIcon = selectedMethod.icon;
   const isMobileWallet = selectedMethod.id === 'gcash' || selectedMethod.id === 'paymaya';
+  const qrSrc = qrOverrides[selectedMethod.id] ?? selectedMethod.qrImage;
+
+  useEffect(() => {
+    fetchPaymentQrOverrides().then(setQrOverrides);
+  }, []);
 
   useEffect(() => {
     if (!proofFile) {
@@ -231,7 +238,7 @@ export default function Recharge() {
               <div className="flex flex-col items-center py-4 bg-[#f8faff] rounded-xl border border-[#dfe5f0]">
                 <div className="bg-white p-3 rounded-2xl shadow-sm">
                   <img
-                    src={selectedMethod.qrImage}
+                    src={qrSrc}
                     alt={`${selectedMethod.label} payment QR code`}
                     className="w-56 h-auto rounded-lg"
                   />

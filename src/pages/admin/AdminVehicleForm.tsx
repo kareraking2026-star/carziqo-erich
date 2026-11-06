@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/context/ToastContext';
+import { uploadAdminImage } from '@/lib/adminMedia';
 import Modal from '@/components/Modal';
-import { Car, Loader as Loader2 } from 'lucide-react';
+import { Car, Loader as Loader2, Upload } from 'lucide-react';
 
 export interface AdminVehicle {
   id: string;
@@ -72,12 +73,28 @@ export default function AdminVehicleForm({ vehicle, onClose, onSaved }: AdminVeh
   const { showToast } = useToast();
   const [values, setValues] = useState<FormValues>(() => toFormValues(vehicle));
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [imageBroken, setImageBroken] = useState(false);
 
   function update<K extends keyof FormValues>(key: K, value: FormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
     if (key === 'image_url') setImageBroken(false);
+  }
+
+  async function handlePhotoChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    setError('');
+    try {
+      const url = await uploadAdminImage(file, 'cars');
+      update('image_url', url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not upload the photo');
+    }
+    setUploading(false);
   }
 
   async function handleSave(e: FormEvent) {
@@ -134,13 +151,25 @@ export default function AdminVehicleForm({ vehicle, onClose, onSaved }: AdminVeh
           ) : (
             <div className="flex flex-col items-center text-[#9babc6]">
               <Car size={28} />
-              <p className="text-[11px] mt-1">{imageBroken ? 'Photo link could not be loaded' : 'No photo yet'}</p>
+              <p className="text-[11px] mt-1">{imageBroken ? 'Photo could not be loaded' : 'No photo yet'}</p>
             </div>
           )}
         </div>
 
+        <label className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-[#dfe5f0] bg-[#f8faff] cursor-pointer hover:border-[#16a35a] transition-colors text-xs font-medium text-[#323643]">
+          {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} className="text-[#9babc6]" />}
+          {uploading ? 'Uploading photo...' : 'Upload car photo (JPG, PNG or WEBP, up to 5 MB)'}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            disabled={uploading}
+            onChange={handlePhotoChange}
+          />
+        </label>
+
         <div>
-          <label htmlFor="car-image" className={labelClass}>Photo link (https)</label>
+          <label htmlFor="car-image" className={labelClass}>Or paste a photo link (https)</label>
           <input
             id="car-image"
             type="url"
@@ -200,7 +229,7 @@ export default function AdminVehicleForm({ vehicle, onClose, onSaved }: AdminVeh
 
         {error && <p className="text-xs text-[#dc2626]">{error}</p>}
 
-        <button type="submit" disabled={saving} className="btn-primary w-full flex items-center justify-center gap-2">
+        <button type="submit" disabled={saving || uploading} className="btn-primary w-full flex items-center justify-center gap-2">
           {saving && <Loader2 size={16} className="animate-spin" />}
           {vehicle ? 'Save changes' : 'Add car'}
         </button>
