@@ -1,13 +1,20 @@
 import { useEffect, useRef } from 'react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { fetchDrivingRoute, positionOnRoute, randomPointNear, type CarRoute, type LatLng } from '@/lib/fleet';
-
-export type CarStatus = 'routing' | 'driving' | 'parked' | 'error';
+import {
+  fetchDrivingRoute,
+  positionOnRoute,
+  randomPointNear,
+  type CarRoute,
+  type CarStatus,
+  type LatLng,
+} from '@/lib/fleet';
+import { bodyColorFor, createCarIcon, type CarVisual } from '@/components/fleetCarIcon';
 
 export interface FleetCar {
   id: string;
   name: string;
+  dailyIncome: number;
 }
 
 export interface FleetCarState {
@@ -15,10 +22,14 @@ export interface FleetCarState {
   speedKmh: number;
 }
 
+type TripLeg = 'pickup' | 'dropoff';
+
 interface CarSim {
+  visual: CarVisual;
   position: LatLng;
   heading: number;
   route: CarRoute | null;
+  leg: TripLeg;
   distance: number;
   speed: number;
   cruiseSpeed: number;
@@ -36,21 +47,17 @@ const ACCELERATION_MPS2 = 0.35;
 const BRAKING_MPS2 = 0.7;
 const CRAWL_MPS = 1.2;
 const SLOW_ZONE_M = 40;
-const DWELL_MIN_MS = 20_000;
-const DWELL_MAX_MS = 60_000;
+const PICKUP_MIN_M = 300;
+const PICKUP_MAX_M = 1500;
 const TRIP_MIN_M = 400;
 const TRIP_MAX_M = 1800;
+const BOARDING_MIN_MS = 5_000;
+const BOARDING_MAX_MS = 9_000;
+const ALIGHTING_MIN_MS = 4_000;
+const ALIGHTING_MAX_MS = 7_000;
+const PARKED_MIN_MS = 15_000;
+const PARKED_MAX_MS = 40_000;
 const RETRY_MS = 15_000;
-
-function carIcon(status: CarStatus): L.DivIcon {
-  const color = status === 'driving' ? '#16a35a' : status === 'error' ? '#ef4444' : '#ef9100';
-  return L.divIcon({
-    className: 'fleet-marker',
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    html: `<div class="fleet-car" style="width:40px;height:40px;transition:transform 0.4s linear"><div style="width:40px;height:40px;border-radius:9999px;background:${color};border:3px solid #ffffff;box-shadow:0 4px 12px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff"><path d="M12 2 4 21l8-4 8 4Z"/></svg></div></div>`,
-  });
-}
 
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
@@ -59,21 +66,34 @@ function randomBetween(min: number, max: number): number {
 function setStatus(sim: CarSim, status: CarStatus) {
   if (sim.status === status) return;
   sim.status = status;
-  sim.marker.setIcon(carIcon(status));
+  sim.marker.setIcon(createCarIcon(sim.visual, status));
 }
 
 function applyHeading(sim: CarSim) {
-  const el = sim.marker.getElement()?.querySelector<HTMLElement>('.fleet-car');
+  const el = sim.marker.getElement()?.querySelector<HTMLElement>('.fleet-car-body');
   if (el) el.style.transform = `rotate(${sim.heading}deg)`;
 }
 
-function startTrip(sim: CarSim) {
+function pauseAt(sim: CarSim, status: CarStatus, minMs: number, maxMs: number, now: number) {
+  sim.route = null;
+  sim.speed = 0;
+  sim.controller = null;
+  sim.dwellUntil = now + randomBetween(minMs, maxMs);
+  setStatus(sim, status);
+}
+
+function startTrip(sim: CarSim, leg: TripLeg) {
   sim.controller?.abort();
   const controller = new AbortController();
   sim.controller = controller;
+  sim.leg = leg;
   setStatus(sim, 'routing');
 
-  const destination = randomPointNear(sim.position, TRIP_MIN_M, TRIP_MAX_M);
+  const destination =
+    leg === 'pickup'
+      ? randomPointNear(sim.position, PICKUP_MIN_M, PICKUP_MAX_M)
+      : randomPointNear(sim.position, TRIP_MIN_M, TRIP_MAX_M);
+
   fetchDrivingRoute(sim.position, destination, controller.signal)
     .then((route) => {
       if (controller.signal.aborted) return;
@@ -82,7 +102,7 @@ function startTrip(sim: CarSim) {
       sim.distance = 0;
       sim.speed = 0;
       sim.cruiseSpeed = randomBetween(CRUISE_MIN_MPS, CRUISE_MAX_MPS);
-      setStatus(sim, 'driving');
+      setStatus(sim, leg === 'pickup' ? 'to-pickup' : 'carrying');
     })
     .catch(() => {
       if (controller.signal.aborted) return;
@@ -90,14 +110,6 @@ function startTrip(sim: CarSim) {
       sim.retryAt = performance.now() + RETRY_MS;
       setStatus(sim, 'error');
     });
-}
-
-function arrive(sim: CarSim, now: number) {
-  sim.route = null;
-  sim.speed = 0;
-  sim.controller = null;
-  sim.dwellUntil = now + randomBetween(DWELL_MIN_MS, DWELL_MAX_MS);
-  setStatus(sim, 'parked');
 }
 
 function moveCar(sim: CarSim, dt: number, now: number) {
@@ -114,13 +126,33 @@ function moveCar(sim: CarSim, dt: number, now: number) {
   sim.position = position;
   sim.heading = heading;
 
-  if (sim.distance >= route.total) arrive(sim, now);
+  if (sim.distance < route.total) return;
+  if (sim.status === 'to-pickup') {
+    pauseAt(sim, 'boarding', BOARDING_MIN_MS, BOARDING_MAX_MS, now);
+  } else {
+    pauseAt(sim, 'alighting', ALIGHTING_MIN_MS, ALIGHTING_MAX_MS, now);
+  }
 }
 
 function stepCar(sim: CarSim, dt: number, now: number) {
-  if (sim.status === 'parked' && now >= sim.dwellUntil) startTrip(sim);
-  if (sim.status === 'error' && now >= sim.retryAt) startTrip(sim);
-  if (sim.status === 'driving') moveCar(sim, dt, now);
+  switch (sim.status) {
+    case 'parked':
+      if (now >= sim.dwellUntil) startTrip(sim, 'pickup');
+      break;
+    case 'boarding':
+      if (now >= sim.dwellUntil) startTrip(sim, 'dropoff');
+      break;
+    case 'alighting':
+      if (now >= sim.dwellUntil) pauseAt(sim, 'parked', PARKED_MIN_MS, PARKED_MAX_MS, now);
+      break;
+    case 'error':
+      if (now >= sim.retryAt) startTrip(sim, sim.leg);
+      break;
+    case 'to-pickup':
+    case 'carrying':
+      moveCar(sim, dt, now);
+      break;
+  }
 }
 
 interface FleetMapProps {
@@ -169,12 +201,19 @@ export default function FleetMap({ cars, onStatusChange }: FleetMapProps) {
 
     cars.forEach((car) => {
       if (sims.has(car.id)) return;
+      const visual: CarVisual = {
+        name: car.name,
+        dailyIncome: car.dailyIncome,
+        color: bodyColorFor(car.id),
+      };
       const position = randomPointNear(BASE_CENTER, 300, 3000);
-      const marker = L.marker(position, { icon: carIcon('parked'), title: car.name }).addTo(map);
+      const marker = L.marker(position, { icon: createCarIcon(visual, 'parked'), keyboard: false }).addTo(map);
       sims.set(car.id, {
+        visual,
         position,
         heading: 0,
         route: null,
+        leg: 'pickup',
         distance: 0,
         speed: 0,
         cruiseSpeed: CRUISE_MIN_MPS,
@@ -204,10 +243,8 @@ export default function FleetMap({ cars, onStatusChange }: FleetMapProps) {
 
       simsRef.current.forEach((sim, id) => {
         stepCar(sim, dt, now);
-        if (sim.status === 'driving') {
-          sim.marker.setLatLng(sim.position);
-          applyHeading(sim);
-        }
+        sim.marker.setLatLng(sim.position);
+        applyHeading(sim);
         report[id] = { status: sim.status, speedKmh: Math.round(sim.speed * 3.6) };
       });
 

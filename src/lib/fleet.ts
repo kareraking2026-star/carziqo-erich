@@ -6,6 +6,18 @@ export interface CarRoute {
   total: number;
 }
 
+export type CarStatus = 'routing' | 'to-pickup' | 'boarding' | 'carrying' | 'alighting' | 'parked' | 'error';
+
+export const STATUS_LABELS: Record<CarStatus, string> = {
+  routing: 'Finding route',
+  'to-pickup': 'Driving to customer',
+  boarding: 'Picking up customer',
+  carrying: 'Carrying customer',
+  alighting: 'Dropping off customer',
+  parked: 'Parked',
+  error: 'Route unavailable, retrying',
+};
+
 const EARTH_RADIUS_M = 6371000;
 const toRad = (deg: number) => (deg * Math.PI) / 180;
 const toDeg = (rad: number) => (rad * 180) / Math.PI;
