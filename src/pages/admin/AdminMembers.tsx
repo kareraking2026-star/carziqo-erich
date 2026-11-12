@@ -5,16 +5,20 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import { EmptyState } from '@/components/UI';
 import AdminMemberForm, { type AdminMember } from '@/pages/admin/AdminMemberForm';
 import AdminWalletForm from '@/pages/admin/AdminWalletForm';
-import { Search, Users, Pencil, Wallet } from 'lucide-react';
+import { useToast } from '@/context/ToastContext';
+import { Search, Users, Pencil, Wallet, Lock, Unlock } from 'lucide-react';
 
 type Mode = 'edit' | 'wallet';
 
 export default function AdminMembers() {
+  const { showToast } = useToast();
   const [members, setMembers] = useState<AdminMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<{ member: AdminMember; mode: Mode } | null>(null);
+  const [confirmBlockId, setConfirmBlockId] = useState<string | null>(null);
+  const [blockBusyId, setBlockBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const { data, error: rpcError } = await supabase.rpc('admin_get_profiles');
@@ -43,6 +47,24 @@ export default function AdminMembers() {
 
   function handleSaved() {
     setActive(null);
+    load();
+  }
+
+  async function toggleBlock(member: AdminMember) {
+    if (confirmBlockId !== member.id) {
+      setConfirmBlockId(member.id);
+      return;
+    }
+    setConfirmBlockId(null);
+    setBlockBusyId(member.id);
+    const fn = member.is_blocked ? 'admin_unblock_user' : 'admin_block_user';
+    const { error: rpcError } = await supabase.rpc(fn, { p_user_id: member.user_id });
+    setBlockBusyId(null);
+    if (rpcError) {
+      showToast('Could not change the account status', 'error');
+      return;
+    }
+    showToast(member.is_blocked ? 'Account unblocked' : 'Account blocked', 'success');
     load();
   }
 
@@ -94,6 +116,27 @@ export default function AdminMembers() {
                   className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#dfe5f0] text-[11px] text-[#323643] hover:border-[#16a35a] transition-colors"
                 >
                   <Wallet size={12} /> Wallet
+                </button>
+                <button
+                  onClick={() => toggleBlock(m)}
+                  disabled={blockBusyId === m.id}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] transition-colors ${
+                    confirmBlockId === m.id
+                      ? 'border-[#dc2626] bg-[#dc2626] text-white'
+                      : m.is_blocked
+                        ? 'border-[#16a35a] text-[#16a35a] hover:bg-[#16a35a]/5'
+                        : 'border-[#f59e0b] text-[#b45309] hover:bg-[#f59e0b]/5'
+                  } disabled:opacity-60`}
+                >
+                  {blockBusyId === m.id ? (
+                    '...'
+                  ) : confirmBlockId === m.id ? (
+                    'Confirm?'
+                  ) : m.is_blocked ? (
+                    <><Unlock size={12} /> Unblock</>
+                  ) : (
+                    <><Lock size={12} /> Block</>
+                  )}
                 </button>
               </div>
             </div>
